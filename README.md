@@ -1,4 +1,4 @@
-# 🦺 Safety-Vision: Detector de EPIs em Tempo Real com YOLOv8
+# 🦺 Safety-Vision: Detector de EPIs com YOLOv8
 
 > **Status:** Concluído ✅  
 > **Modelo:** YOLOv8 (Object Detection)  
@@ -160,15 +160,20 @@ pip install -r requirements.txt
 
 ### 4️⃣ Execute a inferência em vídeo
 
+Para rodar usando processamento via CPU (compatível com qualquer PC):
+
 ```bash
-python src/inference.py --source video_teste.mp4 --output resultado.mp4 --conf 0.5
+python src/inference.py --source video_teste.mp4 --output resultado.mp4 --conf 0.5 --device cpu
 ```
+
+Se tiver uma GPU NVIDIA compatível, substitua --device cpu por --device 0.
 
 ### 5️⃣ Execute em tempo real (Webcam)
 
 ```bash
-python src/inference.py --source 0 --conf 0.5
+python src/inference.py --source 0 --conf 0.5 --device cpu
 ```
+Dica: Pressione CTRL + C no terminal para encerrar a execução e salvar o vídeo.
 
 ---
 
