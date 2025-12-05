@@ -4,10 +4,18 @@ import sys
 import os
 from ultralytics import YOLO
 
-def run_inference(source_path, model_path, output_path, conf_threshold):
-    if not os.path.exists(source_path):
-        print(f"Erro: O arquivo de vídeo '{source_path}' não foi encontrado.")
-        sys.exit(1)
+def run_inference(source_path, model_path, output_path, conf_threshold, device_target):
+    use_webcam = False
+
+    if source_path.isdigit():
+        use_webcam = True
+        source = int(source_path)
+        print(f"Info: Modo Webcam detectado: Câmera {source}")
+    else:
+        source = source_path
+        if not os.path.exists(source):
+            print(f"Erro: O arquivo de vídeo '{source}' não foi encontrado.")
+            sys.exit(1)
         
     if not os.path.exists(model_path):
         print(f"Erro: O arquivo de pesos '{model_path}' não foi encontrado.")
@@ -21,11 +29,19 @@ def run_inference(source_path, model_path, output_path, conf_threshold):
         print(f"Erro: Falha ao carregar o modelo YOLO: {e}")
         sys.exit(1)
 
-    cap = cv2.VideoCapture(source_path)
+    cap = cv2.VideoCapture(source)
+
+    if not cap.isOpened():
+        print(f"Erro: Não foi possível abrir a fonte de vídeo: {source}")
+        sys.exit(1)
+
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    if fps == 0: fps = 30
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if not use_webcam else -1
 
     # Configura Gravador de Saída
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -45,7 +61,7 @@ def run_inference(source_path, model_path, output_path, conf_threshold):
         frame_count += 1
         
         # conf=conf_threshold define a confiança mínima para detectar
-        results = model(frame, verbose=False, conf=conf_threshold)
+        results = model(frame, verbose=False, conf=conf_threshold, device=device_target)
         result = results[0]
 
         # Contadores do Frame Atual
@@ -117,7 +133,8 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default="weights/best.pt", help="Caminho do arquivo de pesos .pt")
     parser.add_argument("--output", type=str, default="output_video.mp4", help="Nome do arquivo de saída")
     parser.add_argument("--conf", type=float, default=0.5, help="Limiar de confiança (0.0 a 1.0)")
+    parser.add_argument("--device", type=str, default="cpu", help="cpu ou 0 para gpu")
 
     args = parser.parse_args()
 
-    run_inference(args.source, args.model, args.output, args.conf)
+    run_inference(args.source, args.model, args.output, args.conf, args.device)
