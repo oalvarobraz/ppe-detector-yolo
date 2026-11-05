@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ppe-detector"
+version = "0.2.0"
+description = "Detector de EPIs (capacete e colete) com YOLOv8, com exportação e benchmark ONNX/OpenVINO"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Álvaro Braz Cunha" }]
+# O torch NÃO está aqui de propósito: ele deve ser instalado antes, a partir do índice
+# certo para a sua GPU (veja o README). O ultralytics instalaria a versão padrão do PyPI,
+# que não suporta GPUs antigas como a MX110 (Maxwell).
+dependencies = [
+    "ultralytics>=8.3",
+    "opencv-python>=4.8",
+    "numpy",
+]
+
+[project.optional-dependencies]
+# Exportação e execução em ONNX / OpenVINO
+export = [
+    "onnx",
+    "onnxslim",
+    "onnxruntime-gpu",  # também roda em CPU
+    "openvino>=2024.0",
+]
+# Download do dataset do Roboflow
+dataset = [
+    "roboflow",
+    "python-dotenv",
+]
+all = ["ppe-detector[export,dataset]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ppe_detector*"]

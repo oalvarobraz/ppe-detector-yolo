@@ -1,17 +1,15 @@
 # 🦺 Safety-Vision: Detector de EPIs com YOLOv8
 
-> **Status:** Concluído ✅  
-> **Modelo:** YOLOv8 (Object Detection)  
-> **mAP50 (All Classes):** 0.83  
-> **Velocidade de Inferência:** ~1.8ms/frame (Tesla T4)
+> **Modelo:** YOLOv8n (Object Detection) · **mAP50 (validação):** 0.82
+> **Formatos:** PyTorch · ONNX · OpenVINO — com benchmark de velocidade e precisão entre eles
 
-Este projeto de Visão Computacional utiliza **Deep Learning** para monitoramento automático de segurança em canteiros de obras, identificando o uso correto de Equipamentos de Proteção Individual (EPIs) como capacetes e coletes em tempo real.
-
-O sistema foi desenvolvido com a arquitetura **YOLOv8 (You Only Look Once)**, conhecida por sua velocidade e precisão, permitindo inferência em tempo real com alta taxa de frames.
+Este projeto de Visão Computacional usa **Deep Learning** para monitorar automaticamente a segurança em canteiros de obras, identificando o uso de Equipamentos de Proteção Individual (EPIs), como capacetes e coletes, em vídeo ou webcam.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c?style=for-the-badge&logo=pytorch&logoColor=white)
 ![YOLOv8](https://img.shields.io/badge/YOLO-v8-green?style=for-the-badge)
+![ONNX](https://img.shields.io/badge/ONNX-Runtime-005CED?style=for-the-badge&logo=onnx&logoColor=white)
+![OpenVINO](https://img.shields.io/badge/OpenVINO-Intel-0071C5?style=for-the-badge&logo=intel&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-CV-red?style=for-the-badge&logo=opencv&logoColor=white)
 
 ---
@@ -22,7 +20,7 @@ O sistema foi desenvolvido com a arquitetura **YOLOv8 (You Only Look Once)**, co
   <img src="assets/demo.gif" alt="Demonstração do Sistema" width="300">
 </p>
 
-*Sistema detectando automaticamente pessoas, capacetes e coletes em vídeo de canteiro de obras*
+*Detecção de pessoas, capacetes e coletes em vídeo de canteiro de obras, com painel de contagem e alertas.*
 
 ---
 
@@ -30,294 +28,220 @@ O sistema foi desenvolvido com a arquitetura **YOLOv8 (You Only Look Once)**, co
 
 ```text
 ppe-detector-yolo/
-│
-├── notebooks/
-│   └── training.ipynb   # Notebook de treinamento e análise
-│
 ├── src/
-│   └── inference.py     # Script principal de inferência
-│
+│   ├── ppe_detector/            # Pacote principal (importável)
+│   │   ├── detector.py          # PPEDetector: carrega .pt/.onnx/OpenVINO e conta as detecções
+│   │   ├── overlay.py           # Painel de estatísticas e alertas desenhado no frame
+│   │   └── video.py             # Loop de vídeo/webcam (gravação, janela, Ctrl+C seguro)
+│   └── scripts/                 # Linha de comando
+│       ├── infer.py             # Inferência em vídeo ou webcam
+│       ├── export_model.py      # Exporta best.pt -> ONNX ou OpenVINO
+│       ├── download_dataset.py  # Baixa o dataset do Roboflow (usa o .env)
+│       └── benchmark.py         # Compara velocidade e mAP entre os formatos
+├── notebooks/
+│   └── exploratory_training.ipynb   # Treinamento original (Google Colab)
 ├── weights/
-│   └── best.pt          # Pesos do modelo treinado
-│
-├── assets/              # Imagens e GIFs para documentação
-│
-├── requirements.txt     # Dependências do projeto
-│
-└── README.md            # Este arquivo
+│   ├── best.pt                  # Pesos treinados (PyTorch)
+│   ├── best.onnx                # Gerado pelo export_model.py
+│   └── best_openvino_model/     # Gerado pelo export_model.py --format openvino
+├── results/benchmark.md         # Último relatório gerado pelo benchmark.py
+├── assets/                      # Imagens e GIF da documentação
+└── pyproject.toml               # Dependências e configuração do pacote
 ```
-
----
-
-## 🛠️ Tecnologias Utilizadas
-
-- **Ultralytics YOLOv8:** Framework de detecção de objetos state-of-the-art
-- **PyTorch:** Backend de Deep Learning
-- **OpenCV:** Processamento de vídeo e visualização
-- **Python 3.10+:** Linguagem base do projeto
-- **Google Colab:** Ambiente de treinamento com GPU
 
 ---
 
 ## 🧠 Sobre o Projeto
 
-A segurança em canteiros de obras é **crítica** e regulamentada por normas trabalhistas. Este projeto automatiza o monitoramento de conformidade com EPIs obrigatórios, reduzindo riscos de acidentes.
+A segurança em canteiros de obras é **crítica** e regulamentada por normas trabalhistas. Este projeto automatiza o monitoramento de conformidade com EPIs obrigatórios.
 
 ### 🔹 Funcionalidades
 
-- ✅ **Detecção de Pessoas** em tempo real
-- ✅ **Verificação de Capacete** (Helmet) e **Colete** (Vest)
-- ⚠️ **Alertas visuais** para ausência de EPIs (No-Helmet / No-Vest)
-- 📊 **Estatísticas em tempo real** na tela
-- 🎥 **Processamento de vídeo** com saída anotada
+- ✅ **Detecção de pessoas, capacetes e coletes** em vídeo ou webcam
+- ⚠️ **Alertas visuais** para ausência de EPIs (`no-helmet` / `no-vest`)
+- 📊 **Painel de contagem** por frame
+- 🎥 **Vídeo de saída anotado**, salvo corretamente mesmo ao interromper com Ctrl+C
+- ⚡ **Exportação para ONNX e OpenVINO**, com benchmark de velocidade e precisão
 
 ### 🔹 Classes Detectadas
 
-| Classe | Descrição | Cor do Bbox |
-|--------|-----------|-------------|
-| 👷 **Person** | Pessoa detectada | Azul |
-| ⛑️ **Helmet** | Capacete presente | Verde |
-| 🦺 **Vest** | Colete presente | Verde |
-| 🚫 **No-Helmet** | Ausência de capacete | Vermelho |
-| 🚫 **No-Vest** | Ausência de colete | Vermelho |
+| Classe | Descrição |
+|--------|-----------|
+| 👷 `person` | Pessoa detectada |
+| ⛑️ `helmet` | Capacete presente |
+| 🦺 `vest` | Colete presente |
+| 🚫 `no-helmet` | Ausência de capacete |
+| 🚫 `no-vest` | Ausência de colete |
 
 ---
 
-## 📊 Métricas de Desempenho
+## ⚙️ Instalação
 
-O modelo foi treinado por **30 épocas** com resolução de entrada de **640x640**. Abaixo estão os resultados obtidos no conjunto de validação:
-
-### 🔹 Resultados por Classe
-
-| Classe | Precision (P) | Recall (R) | mAP50 | mAP50-95 | Status |
-|--------|---------------|-----------|-------|----------|--------|
-| **All (Geral)** | **0.73** | **0.82** | **0.83** | **0.61** | 🟢 Ótimo |
-| 👷 Person | 0.85 | 0.95 | **0.94** | 0.77 | 🟢 Excelente |
-| ⛑️ Helmet | 0.77 | 0.96 | **0.93** | 0.72 | 🟢 Excelente |
-| 🦺 Vest | 0.81 | 0.86 | **0.90** | 0.63 | 🟢 Excelente |
-| 🚫 No-Helmet | 0.54 | 0.43 | 0.56 | 0.36 | 🟡 Atenção* |
-| 🚫 No-Vest | 0.68 | 0.71 | 0.73 | 0.55 | 🟢 Bom |
-
-> **\*Nota Técnica:** A classe `No-Helmet` apresenta métricas mais baixas devido ao **desbalanceamento do dataset**. Há significativamente mais exemplos de operários *com* capacete do que *sem*, o que dificulta a aprendizagem da classe minoritária. Este é um ponto de melhoria mapeado para versões futuras através de técnicas de balanceamento e data augmentation.
-
-**Matriz de Confusão:**
-<p align="center">
-  <img src="assets/confusion_matrix.png" alt="Matriz de Confusão" width="600">
-</p>
-> *Observe a confusão maior nas classes 'No-Helmet' e 'No-Vest', confirmando a necessidade de mais dados para esses cenários.*
-
-### 🔹 Performance de Inferência
-
-| Métrica | Valor |
-|---------|-------|
-| **Velocidade (GPU T4)** | ~1.8ms por frame |
-| **FPS Estimado** | ~550 FPS |
-| **Tamanho do Modelo** | ~6.2 MB |
-| **Parâmetros** | ~3.0M |
-
----
-
-## 🎯 Análise de Resultados
-
-### ✅ Pontos Fortes
-
-- **Alta precisão em detecção de pessoas** (0.95 Recall) - praticamente não perde operários na cena
-- **Excelente identificação de EPIs corretos** (Helmet e Vest com mAP50 > 0.90)
-- **Velocidade de inferência** permite uso em tempo real
-- **Modelo leve** (~6MB) viabiliza deploy em edge devices
-
-### ⚠️ Desafios Identificados
-
-- **Classe No-Helmet sub-representada** - Precision de 0.54 e Recall de 0.43
-- **Necessidade de balanceamento** para melhorar detecção de violações de segurança
-- **Possível viés do modelo** em favorecer detecção de conformidade vs. não-conformidade
-
----
-
-## ⚙️ Como Executar
-
-### 1️⃣ Clone o repositório
+### 1️⃣ Clone o repositório e crie um ambiente virtual
 
 ```bash
 git clone https://github.com/seu-usuario/ppe-detector-yolo.git
 cd ppe-detector-yolo
+python -m venv .venv
+source .venv/bin/activate      # Linux/Mac
+# .venv\Scripts\activate       # Windows
 ```
 
-### 2️⃣ Crie um ambiente virtual (Recomendado)
+### 2️⃣ Instale o PyTorch para o seu hardware
+
+O PyTorch é instalado separadamente porque a versão certa depende da sua GPU. Escolha **uma** opção:
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate     # Windows
+# GPU NVIDIA (CUDA 12.6 — inclui GPUs antigas, como Maxwell/MX110)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+
+# Apenas CPU
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 ```
 
-### 3️⃣ Instale as dependências
+> As versões CUDA mais novas do PyTorch deixaram de suportar GPUs Maxwell (compute capability 5.0). Com elas, `torch.cuda.is_available()` até retorna `True`, mas a inferência falha com *"no kernel image is available"*.
+
+### 3️⃣ Instale o projeto
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[all]"
 ```
 
-### 4️⃣ Execute a inferência em vídeo
-
-Para rodar usando processamento via CPU (compatível com qualquer PC):
-
-```bash
-python src/inference.py --source video_teste.mp4 --output resultado.mp4 --conf 0.5 --device cpu
-```
-
-Se tiver uma GPU NVIDIA compatível, substitua --device cpu por --device 0.
-
-### 5️⃣ Execute em tempo real (Webcam)
-
-```bash
-python src/inference.py --source 0 --conf 0.5 --device cpu
-```
-Dica: Pressione CTRL + C no terminal para encerrar a execução e salvar o vídeo.
+| Extra | O que instala |
+|-------|---------------|
+| *(nenhum)* | Inferência com o `.pt` (ultralytics, OpenCV) |
+| `export` | ONNX, ONNX Runtime e OpenVINO |
+| `dataset` | Roboflow e python-dotenv (download do dataset) |
+| `all` | Tudo acima |
 
 ---
 
-## 🎛️ Argumentos da Linha de Comando
+## 🚀 Como Usar
 
-| Argumento | Descrição | Padrão | Exemplo |
-|-----------|-----------|--------|---------|
-| `--source` | Vídeo de entrada ou webcam | - | `video.mp4` ou `0` |
-| `--output` | Arquivo de saída | `output.mp4` | `resultado.mp4` |
-| `--conf` | Limiar de confiança | `0.5` | `0.6` |
-| `--model` | Caminho dos pesos | `weights/best.pt` | `custom_weights.pt` |
-| `--device` | GPU ou CPU | `auto` | `cuda` ou `cpu` |
-
-**Exemplo completo:**
+### 🎥 Inferência em vídeo ou webcam
 
 ```bash
-python src/inference.py \
-  --source construcao.mp4 \
-  --output analise_seguranca.mp4 \
-  --conf 0.6 \
-  --device cuda
+# Vídeo, salvando o resultado
+python src/scripts/infer.py --source videos/obra.mp4 --output resultado.mp4
+
+# Webcam, mostrando numa janela (tecla 'q' ou Ctrl+C para sair)
+python src/scripts/infer.py --source 0 --show
+
+# Com GPU NVIDIA e modelo ONNX
+python src/scripts/infer.py --source videos/obra.mp4 --model weights/best.onnx --device 0
 ```
+
+| Argumento | Descrição | Padrão |
+|-----------|-----------|--------|
+| `--source` | Arquivo de vídeo ou índice da webcam (`0`, `1`, ...) | *(obrigatório)* |
+| `--model` | Pesos: `.pt`, `.onnx` ou pasta `_openvino_model` | `weights/best.pt` |
+| `--output` | Arquivo de vídeo de saída | `output_video.mp4` |
+| `--conf` | Limiar de confiança (0.0 a 1.0) | `0.5` |
+| `--device` | `cpu`, `0` (GPU NVIDIA) ou `intel:cpu` (OpenVINO) | `cpu` |
+| `--show` | Mostra o resultado numa janela | desligado |
+
+### 📦 Exportação
+
+```bash
+python src/scripts/export_model.py                      # -> weights/best.onnx
+python src/scripts/export_model.py --format openvino    # -> weights/best_openvino_model/
+```
+
+### ⏱️ Benchmark
+
+O dataset de validação vem do Roboflow. Crie um arquivo `.env` na raiz com a sua chave (o arquivo é ignorado pelo git):
+
+```bash
+ROBOFLOW_API_KEY=sua_chave_aqui
+```
+
+```bash
+python src/scripts/download_dataset.py
+python src/scripts/benchmark.py --video videos/obra.mp4 --data datasets/construction-safety/data.yaml
+```
+
+Sem `--data`, o benchmark mede só a velocidade. O relatório é salvo em `results/benchmark.md`.
 
 ---
 
-## 📦 Dependências Principais
+## 📊 Resultados
 
-```text
-# Deep Learning
-ultralytics>=8.0.0
-torch>=2.0.0
-torchvision>=0.15.0
+Medido com `src/scripts/benchmark.py` num notebook **Intel Core i7-8565U** (4 núcleos, 8ª geração) com **GeForce MX110** (2 GB), perfil de energia em *performance*. Foram 300 frames de vídeo × 3 rodadas alternadas entre as variantes, após 20 frames de aquecimento.
 
-# Processamento de Vídeo
-opencv-python>=4.8.0
-opencv-contrib-python>=4.8.0
+### ⚡ Velocidade (entrada 640×640, batch 1)
 
-# Utilidades
-numpy>=1.24.0
-pandas>=2.0.0
-matplotlib>=3.7.0
-pillow>=10.0.0
+| Variante | Inferência p50 (ms) | p95 (ms) | Total/frame (ms) | FPS |
+|----------|--------------------:|---------:|-----------------:|----:|
+| PyTorch — GPU MX110 | **51.7** | **51.9** | 56.5 | **17.7** |
+| OpenVINO — CPU | 63.0 | 84.6 | 71.6 | 14.0 |
+| ONNX Runtime — CPU | 71.5 | 110.9 | 84.6 | 11.8 |
+| PyTorch — CPU | 78.8 | 96.8 | 77.9 | 12.8 |
 
-# Ambiente de Desenvolvimento
-jupyter>=1.0.0
-ipython>=8.12.0
-```
+*Total/frame inclui pré-processamento (redimensionamento) e pós-processamento (NMS).*
+
+- **GPU:** a mais rápida e a mais estável (p50 ≈ p95), mesmo sendo uma GPU de entrada.
+- **CPU:** o **OpenVINO** foi o mais rápido, cerca de 20% à frente do PyTorch e 12% à frente do ONNX Runtime, como esperado num motor otimizado para hardware Intel.
+- **ONNX Runtime vs PyTorch na CPU:** resultado **inconclusivo** nesta máquina. Numa execução anterior, o PyTorch CPU marcou 50 ms (p50) contra 70 ms do ONNX. O PyTorch CPU foi a variante mais sensível a temperatura e carga do sistema, enquanto ONNX (70–72 ms) e GPU (52 ms) se repetiram entre execuções.
+
+### 🎯 Precisão (split de validação, 119 imagens)
+
+| Variante | mAP50 | mAP50-95 | helmet | no-helmet | no-vest | person | vest |
+|----------|------:|---------:|-------:|----------:|--------:|-------:|-----:|
+| PyTorch (CPU e GPU) | 0.816 | 0.467 | 0.933 | 0.480 | 0.827 | 0.938 | 0.903 |
+| ONNX Runtime | 0.816 | 0.467 | 0.933 | 0.480 | 0.827 | 0.938 | 0.903 |
+| OpenVINO | 0.816 | 0.467 | 0.933 | 0.480 | 0.827 | 0.938 | 0.903 |
+
+**As exportações não perderam precisão:** as quatro variantes têm resultados idênticos. Para a mesma entrada, as saídas brutas do PyTorch e do ONNX diferem em menos de 0.001.
+
+> Todas as variantes são validadas com imagem quadrada 640×640 (`rect=False`), porque os modelos exportados têm entrada fixa. Validando o `.pt` com o padrão do ultralytics (`rect=True`, padding mínimo por imagem), o mAP50 sobe para 0.841 e o de `no-helmet` para 0.609. Essa diferença vem do pré-processamento, não do modelo, e é amplificada pelas poucas amostras de `no-helmet`.
 
 ---
 
-## 🧪 Treinamento do Modelo
+## 🧪 Treinamento
 
-O modelo foi treinado utilizando o seguinte pipeline:
-
-### 🔹 Configuração de Treinamento
+O modelo foi treinado no Google Colab (GPU T4) com o notebook `notebooks/exploratory_training.ipynb`:
 
 ```python
 from ultralytics import YOLO
 
-# Carregar modelo pré-treinado
-model = YOLO('yolov8n.pt')
-
-# Treinar no dataset customizado
-results = model.train(
-    data='dataset.yaml',
-    epochs=30,
-    imgsz=640,
-    batch=16,
-    device=0,
-    patience=10,
-    save=True,
-    cache=True
-)
+model = YOLO("yolov8n.pt")
+model.train(data="data.yaml", epochs=30, imgsz=640, batch=16, patience=10, cache=True)
 ```
 
 ### 🔹 Dataset
 
-- **Fonte:** Roboflow Universe - Construction Safety Dataset
-- **Total de Imagens:** ~5.000 imagens anotadas
-- **Split:** 70% Treino / 20% Validação / 10% Teste
-- **Augmentations:** Flip horizontal, rotação, zoom, brightness
+**Fonte:** [Roboflow 100 — Construction Safety](https://universe.roboflow.com/roboflow-100/construction-safety-gsnvb) (versão 2, licença CC BY 4.0)
+
+| Split | Imagens | helmet | no-helmet | no-vest | person | vest |
+|-------|---------|--------|-----------|---------|--------|------|
+| Treino | 997 | 1443 | **73** | 695 | 2175 | 1004 |
+| Validação | 119 | 148 | **10** | 86 | 222 | 131 |
+| Teste | 90 | 143 | **21** | 59 | 190 | 121 |
+
+Total: **1.206 imagens** (83% treino / 10% validação / 7% teste).
+
+> ⚠️ **O ponto fraco do modelo é o desbalanceamento:** há apenas **73** exemplos de `no-helmet` no treino, contra **1443** de `helmet` (cerca de 20×). Como só 10 caixas de `no-helmet` existem na validação, o mAP dessa classe também é instável: errar uma ou duas caixas muda bastante o número.
 
 ---
 
-## 🚀 Roadmap: Próximos Passos
+## 🛣️ Roadmap
 
-### 🔹 1. Balanceamento do Dataset
-
-- Coletar mais imagens de situações de **não-conformidade** (No-Helmet, No-Vest)
-- Aplicar **data augmentation** agressivo nas classes minoritárias
-- Utilizar **weighted sampling** durante o treinamento
-
-### 🔹 2. Lógica de Zonas de Perigo
-
-- Implementar detecção de **zonas críticas** (polígonos definidos pelo usuário)
-- Alertas específicos quando operários sem EPIs entram em áreas perigosas
-- Sistema de notificação em tempo real
-
-### 🔹 3. Otimização para Edge Devices
-
-- Conversão para **TensorRT** para Jetson Nano
-- Quantização do modelo para **ONNX Runtime**
-- Deploy em **Raspberry Pi 4** com Coral TPU
-
-### 🔹 4. Sistema de Alertas
-
-- Integração com **sistema de som** para alertas sonoros
-- Dashboard web para **monitoramento remoto**
-- Logs de violações de segurança com timestamp e captura de tela
-
-### 🔹 5. Expansão de EPIs
-
-- Adicionar detecção de **luvas de segurança**
-- Identificar **calçados de proteção**
-- Reconhecer **óculos de proteção**
+- [x] Exportação para **ONNX** e **OpenVINO**, com benchmark de velocidade e precisão
+- [ ] **Balanceamento do dataset:** mais imagens de `no-helmet` / `no-vest` e augmentation nas classes minoritárias
+- [ ] **Retreino** com modelo maior (YOLOv8s), mais épocas e `imgsz` maior para objetos pequenos
+- [ ] Adaptar ao contexto brasileiro (ex.: cinto/arnês de altura, que hoje é confundido com `no-vest`)
+- [ ] **Quantização INT8** (OpenVINO/ONNX) e medição do trade-off velocidade × precisão
+- [ ] **Zonas de perigo:** polígonos definidos pelo usuário com alertas específicos
+- [ ] **Sistema de alertas:** log de violações com timestamp e captura de tela
 
 ---
 
 ## ✅ Principais Aprendizados
 
-- **YOLOv8 em produção:** Implementação completa de pipeline de detecção em tempo real
-- **Desbalanceamento de classes:** Impacto crítico nas métricas de classes minoritárias
-- **Trade-off Precision/Recall:** Em aplicações de segurança, alto Recall é mais importante (melhor ter falsos positivos que miss)
-- **Otimização de inferência:** Técnicas para acelerar processamento de vídeo
-- **Computer Vision aplicada:** Solução de problema real da indústria
-
----
-
-## 🎯 Conclusão
-
-O **Safety-Vision** demonstra a aplicabilidade de Deep Learning em **segurança do trabalho**, alcançando métricas competitivas (mAP50 de 0.83) e velocidade adequada para uso em tempo real.
-
-**Conquistas:**
-- ✅ Detecção robusta de pessoas e EPIs básicos
-- ✅ Inferência em tempo real (~1.8ms/frame)
-- ✅ Modelo leve e deployável
-- ✅ Pipeline completo de treinamento e inferência
-
-**Desafios e Próximos Passos:**
-- ⚠️ Melhorar detecção de não-conformidades através de balanceamento
-- 🔄 Implementar lógica de zonas e alertas inteligentes
-- 🚀 Otimizar para deploy em dispositivos edge
-
-Este projeto serve como base sólida para sistemas de **monitoramento automatizado de segurança**, com potencial de expansão para múltiplos cenários industriais.
+- **Formato não é sinônimo de velocidade:** exportar para ONNX não garantiu ganho nesta CPU Intel, porque o PyTorch já usa bibliotecas otimizadas (oneDNN). O ganho veio do **motor certo para o hardware** (OpenVINO em CPU Intel).
+- **Compare de igual para igual:** a primeira medição de mAP indicou queda no ONNX, mas era diferença de **pré-processamento** (o `.pt` valida com `rect=True` por padrão). Com a mesma entrada, as saídas do PyTorch e do ONNX diferem em menos de 0.001.
+- **Benchmark em notebook é ruidoso:** temperatura (82 °C), perfil de energia e outros programas mudam os tempos. Aquecimento, rodadas alternadas e percentis (p50/p95) tornam a comparação confiável.
+- **Desbalanceamento de classes** afeta justamente o que mais importa num sistema de segurança: detectar a *falta* de EPI.
 
 ---
 
@@ -331,15 +255,8 @@ Projeto desenvolvido para fins de **estudo, pesquisa e portfólio profissional e
 
 ---
 
-## 📄 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
-
----
-
 ## 🙏 Agradecimentos
 
-- **Roboflow Universe:** Dataset de Construction Safety
-- **Ultralytics:** Framework YOLOv8
-- **Google Colab:** Infraestrutura de treinamento com GPU gratuita
-- **Comunidade de Computer Vision:** Por compartilhar conhecimento sobre detecção de objetos
+- **Roboflow Universe:** dataset Construction Safety
+- **Ultralytics:** framework YOLOv8
+- **Google Colab:** infraestrutura de treinamento com GPU gratuita
