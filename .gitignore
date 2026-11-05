@@ -208,3 +208,10 @@ __marimo__/
 
 
 *.mp4
+# Dataset e saídas do ultralytics
+datasets/
+runs/
+
+# Pesos exportados (gerados a partir do .pt com src/scripts/export_model.py)
+weights/*.onnx
+weights/*_openvino_model/
