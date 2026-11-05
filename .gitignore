@@ -215,3 +215,6 @@ runs/
 # Pesos exportados (gerados a partir do .pt com src/scripts/export_model.py)
 weights/*.onnx
 weights/*_openvino_model/
+
+# Pesos pré-treinados que o ultralytics baixa na raiz (ex.: yolov8n.pt)
+/*.pt
