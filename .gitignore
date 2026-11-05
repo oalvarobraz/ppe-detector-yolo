@@ -218,3 +218,6 @@ weights/*_openvino_model/
 
 # Pesos pré-treinados que o ultralytics baixa na raiz (ex.: yolov8n.pt)
 /*.pt
+
+# Experimento descartado (v8n retreinado, sem ganho; resultados em results/benchmark_v2n.md)
+weights/best_v2n.pt

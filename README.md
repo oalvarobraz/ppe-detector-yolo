@@ -195,6 +195,20 @@ Medido com `src/scripts/benchmark.py` num notebook **Intel Core i7-8565U** (4 n�
 
 > Todas as variantes são validadas com imagem quadrada 640×640 (`rect=False`), porque os modelos exportados têm entrada fixa. Validando o `.pt` com o padrão do ultralytics (`rect=True`, padding mínimo por imagem), o mAP50 sobe para 0.841 e o de `no-helmet` para 0.609. Essa diferença vem do pré-processamento, não do modelo, e é amplificada pelas poucas amostras de `no-helmet`.
 
+### 🔁 Retreino: YOLOv8n vs YOLOv8s (split de teste, 90 imagens)
+
+Os retreinos foram feitos no Google Colab com `src/scripts/train.py` (100 épocas com `patience=20`; os dois pararam cedo). Todos os modelos foram avaliados no mesmo split de **teste**, nunca visto no treino.
+
+| Modelo | mAP50 | mAP50-95 | helmet | **no-helmet** | no-vest | person | vest | GPU p50 | OpenVINO p50 |
+|--------|------:|---------:|-------:|--------------:|--------:|-------:|-----:|--------:|-------------:|
+| `best.pt` — v8n original (30 épocas) | 0.751 | **0.401** | 0.900 | 0.482 | 0.667 | 0.856 | **0.847** | **52 ms** | **63 ms** |
+| v8n retreinado (melhor época: 19) | 0.744 | 0.375 | 0.889 | 0.457 | 0.634 | **0.895** | 0.845 | 58 ms | 67 ms |
+| `best_v2.pt` — v8s (melhor época: 23) | **0.776** | 0.394 | **0.916** | **0.645** | **0.677** | 0.870 | 0.774 | 108 ms | 197 ms |
+
+- **Retreinar o v8n não trouxe ganho.** A melhora em `no-helmet` (0.48 → 0.65) veio do **modelo maior**, ao custo de ser 2–3× mais lento.
+- **A validação durante o treino superestima o modelo.** O v8n retreinado marcou mAP50 de 0.88 na validação (119 imagens, usadas para escolher o checkpoint) e 0.744 no teste.
+- Relatórios completos: [`results/benchmark_v2.md`](results/benchmark_v2.md) e [`results/benchmark_v2n.md`](results/benchmark_v2n.md).
+
 ---
 
 ## 🧪 Treinamento
@@ -228,7 +242,7 @@ Total: **1.206 imagens** (83% treino / 10% validação / 7% teste).
 
 - [x] Exportação para **ONNX** e **OpenVINO**, com benchmark de velocidade e precisão
 - [ ] **Balanceamento do dataset:** mais imagens de `no-helmet` / `no-vest` e augmentation nas classes minoritárias
-- [ ] **Retreino** com modelo maior (YOLOv8s), mais épocas e `imgsz` maior para objetos pequenos
+- [x] **Retreino** com modelo maior (YOLOv8s): `no-helmet` 0.48 → 0.65 no teste, porém 2–3× mais lento
 - [ ] Adaptar ao contexto brasileiro (ex.: cinto/arnês de altura, que hoje é confundido com `no-vest`)
 - [ ] **Quantização INT8** (OpenVINO/ONNX) e medição do trade-off velocidade × precisão
 - [ ] **Zonas de perigo:** polígonos definidos pelo usuário com alertas específicos
