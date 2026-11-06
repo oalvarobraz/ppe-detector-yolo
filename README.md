@@ -38,6 +38,7 @@ ppe-detector-yolo/
 │       ├── export_model.py      # Exporta .pt -> ONNX ou OpenVINO
 │       ├── benchmark.py         # Compara velocidade e mAP entre os formatos
 │       ├── tune_threshold.py    # Precisão/recall por limiar de confiança (escolha do limiar)
+│       ├── build_test_nohelmet.py   # Teste extra de "sem capacete", sem imagens do treino
 │       ├── train.py             # Treino (pensado para o Google Colab)
 │       ├── download_dataset.py  # Baixa o dataset do Roboflow (usa o .env)
 │       ├── download_hardhat.py  # Baixa as imagens "sem capacete" do Hard Hat Detection
@@ -236,6 +237,20 @@ O mAP resume todos os limiares de confiança, mas o detector usa **um** limiar. 
 - O `infer.py` usa **limiar 0.3 só para `no-helmet`** (`--class-conf`) e 0.5 para as outras classes. Num sistema de segurança, um alarme falso custa menos que deixar passar alguém sem capacete.
 - Com só 24 casos no teste, esses números têm bastante incerteza.
 
+### 🧪 Teste extra de "sem capacete" (1.995 casos)
+
+Para reduzir essa incerteza, `src/scripts/build_test_nohelmet.py` monta um segundo conjunto de teste com **1.378 imagens inéditas** do Hard Hat Workers. As imagens repetidas do treino foram removidas por **hash perceptual**. O conjunto tem 378 imagens com cabeças sem capacete e 1.000 só com capacete, somando **1.995 casos de `no-helmet`** (contra 24 no teste original).
+
+| Modelo | AP50 no-helmet | Recall (limiar 0.3) | Precisão (limiar 0.3) |
+|--------|---------------:|--------------------:|----------------------:|
+| `best.pt` | 0.278 | 0.23 | 0.53 |
+| `best_v2.pt` | 0.558 | 0.50 | 0.75 |
+| `best_v3.pt` ⚠️ | 0.944 | 0.95 | 0.84 |
+
+- **Confirma, agora com uma amostra grande, que o modelo maior dobra o AP50 de `no-helmet`** (original → v2). Essa comparação é justa, porque nenhum dos dois viu essa coleção.
+- ⚠️ **O v3 está favorecido neste conjunto.** As imagens são inéditas, mas vêm da mesma coleção que as imagens extras do treino dele, com o mesmo estilo de foto e de anotação. O número dele **não** representa o desempenho em câmeras de obra reais.
+- Detalhes em [`results/test_nohelmet.md`](results/test_nohelmet.md).
+
 ---
 
 ## 🧪 Treinamento
@@ -290,7 +305,8 @@ python src/scripts/build_merged_dataset.py   # junta tudo em datasets/merged
 - [x] **Retreino** com modelo maior (YOLOv8s): `no-helmet` 0.48 → 0.65 no teste, porém cerca de 2× mais lento
 - [x] **Mais dados de `no-helmet`** (Hard Hat Detection + pseudo-rótulos): recall do alerta 0.04 → 0.67
 - [x] **Limiar de confiança por classe** (`no-helmet=0.3`), escolhido com `tune_threshold.py`
-- [ ] Ampliar o split de teste: com 24 casos de `no-helmet`, as métricas dessa classe ainda são incertas
+- [x] Teste extra de `no-helmet` com 1.995 casos inéditos (deduplicados por hash perceptual)
+- [ ] **Teste do domínio de aplicação:** 200–300 imagens de obras reais anotadas à mão, para avaliar o v3 sem o viés da coleção de treino
 - [ ] Adaptar ao contexto brasileiro (ex.: cinto/arnês de altura, que hoje é confundido com `no-vest`)
 - [ ] **Quantização INT8** (OpenVINO/ONNX) e medição do trade-off velocidade × precisão
 - [ ] **Zonas de perigo:** polígonos definidos pelo usuário com alertas específicos
