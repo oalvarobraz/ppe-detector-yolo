@@ -22,7 +22,8 @@ from ppe_detector.detector import PPEDetector
 def build_variants(pt_path: str) -> list[tuple[str, str, str]]:
     """(nome que aparece na tabela, arquivo de pesos, device) para cada variante.
 
-    Os exportados ficam ao lado do .pt: best.pt -> best.onnx e best_openvino_model/.
+    Os exportados ficam ao lado do .pt: best.pt -> best.onnx, best_openvino_model/ e, se existirem,
+    as versões INT8 best_int8.onnx e best_int8_openvino_model/ (variantes ausentes são puladas).
     """
     pt = Path(pt_path)
     return [
@@ -32,6 +33,8 @@ def build_variants(pt_path: str) -> list[tuple[str, str, str]]:
         # "intel:cpu" e não "cpu": com "cpu" o ultralytics deixa o OpenVINO em modo AUTO,
         # que pode escolher a GPU NVIDIA via OpenCL em vez da CPU.
         ("OpenVINO CPU", str(pt.parent / f"{pt.stem}_openvino_model"), "intel:cpu"),
+        ("ONNX Runtime INT8 CPU", str(pt.with_name(f"{pt.stem}_int8.onnx")), "cpu"),
+        ("OpenVINO INT8 CPU", str(pt.parent / f"{pt.stem}_int8_openvino_model"), "intel:cpu"),
     ]
 
 

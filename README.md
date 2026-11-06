@@ -35,7 +35,7 @@ ppe-detector-yolo/
 │   │   └── video.py             # Loop de vídeo/webcam (gravação, janela, Ctrl+C seguro)
 │   └── scripts/                 # Linha de comando
 │       ├── infer.py             # Inferência em vídeo ou webcam
-│       ├── export_model.py      # Exporta .pt -> ONNX ou OpenVINO
+│       ├── export_model.py      # Exporta .pt -> ONNX ou OpenVINO (FP32 ou INT8)
 │       ├── benchmark.py         # Compara velocidade e mAP entre os formatos
 │       ├── tune_threshold.py    # Precisão/recall por limiar de confiança (escolha do limiar)
 │       ├── build_test_nohelmet.py   # Teste extra de "sem capacete", sem imagens do treino
@@ -137,8 +137,8 @@ python src/scripts/infer.py --source 0 --show
 # Com GPU NVIDIA
 python src/scripts/infer.py --source videos/obra.mp4 --device 0
 
-# Na CPU com OpenVINO (o mais rápido em CPU Intel)
-python src/scripts/infer.py --source videos/obra.mp4 --model weights/best_v3_openvino_model --device intel:cpu
+# Só CPU: OpenVINO INT8 (~2x mais rápido que FP32, mesma precisão; gere com export_model.py --int8)
+python src/scripts/infer.py --source videos/obra.mp4 --model weights/best_v3_int8_openvino_model --device intel:cpu
 ```
 
 | Argumento | Descrição | Padrão |
@@ -156,6 +156,10 @@ python src/scripts/infer.py --source videos/obra.mp4 --model weights/best_v3_ope
 ```bash
 python src/scripts/export_model.py                      # -> weights/best.onnx
 python src/scripts/export_model.py --format openvino    # -> weights/best_openvino_model/
+
+# INT8 (o mais rápido em CPU Intel). A calibração usa ~300 imagens do treino do dataset ampliado.
+python src/scripts/export_model.py --model weights/best_v3.pt --format openvino --int8 \
+    --data datasets/merged/data.yaml                    # -> weights/best_v3_int8_openvino_model/
 ```
 
 ### ⏱️ Benchmark
@@ -251,6 +255,24 @@ Para reduzir essa incerteza, `src/scripts/build_test_nohelmet.py` monta um segun
 - ⚠️ **O v3 está favorecido neste conjunto.** As imagens são inéditas, mas vêm da mesma coleção que as imagens extras do treino dele, com o mesmo estilo de foto e de anotação. O número dele **não** representa o desempenho em câmeras de obra reais.
 - Detalhes em [`results/test_nohelmet.md`](results/test_nohelmet.md).
 
+### 🗜️ Quantização INT8 (`best_v3.pt`)
+
+Na quantização INT8, pesos e ativações deixam de ser floats de 32 bits e passam a ser inteiros de 8 bits. A calibração usou ~300 imagens do **treino**. Medido no split de teste, com o mesmo protocolo do benchmark acima:
+
+| Variante | Tamanho | Inferência p50 | p95 | FPS | mAP50 | mAP50-95 | no-helmet AP50 |
+|----------|--------:|---------------:|----:|----:|------:|---------:|---------------:|
+| PyTorch — GPU MX110 | 22 MB | 108.5 ms | 108.7 ms | 8.8 | 0.790 | 0.417 | 0.657 |
+| PyTorch — CPU | 22 MB | 229.2 ms | 242.9 ms | 4.6 | 0.790 | 0.417 | 0.657 |
+| OpenVINO FP32 — CPU | 43 MB | 197.9 ms | 243.2 ms | 4.7 | 0.790 | 0.417 | 0.657 |
+| **OpenVINO INT8 — CPU** | **11 MB** | **106.5 ms** | **123.6 ms** | **8.7** | 0.789 | 0.418 | 0.670 |
+| ONNX Runtime FP32 — CPU | 43 MB | 276.0 ms | 321.0 ms | 3.8 | 0.790 | 0.417 | 0.657 |
+| ONNX Runtime INT8 — CPU | 11 MB | 282.4 ms | 453.2 ms | 3.1 | 0.790 | 0.410 | 0.680 |
+
+- **OpenVINO INT8 ficou 1,9× mais rápido que o OpenVINO FP32, sem perda de precisão.** Na CPU, ele chega à mesma velocidade da GPU dedicada (MX110), num modelo 4× menor.
+- **ONNX Runtime INT8 não ganhou nada nesta CPU** e ficou até mais instável. A CPU (8ª geração) não tem as instruções de inteiros para IA (VNNI), e sem elas os kernels INT8 do ONNX Runtime rendem pouco; a conversão entre INT8 e float de cada camada acaba custando mais que o ganho. O OpenVINO tem kernels INT8 otimizados também para AVX2, por isso ganhou.
+- **O alerta "sem capacete" se manteve:** no teste extra, com limiar 0.3, o recall foi de 0.95 para 0.94 e a precisão de 0.84 para 0.83 (OpenVINO INT8 contra PyTorch).
+- Relatório completo: [`results/benchmark_v3_int8.md`](results/benchmark_v3_int8.md).
+
 ---
 
 ## 🧪 Treinamento
@@ -308,7 +330,7 @@ python src/scripts/build_merged_dataset.py   # junta tudo em datasets/merged
 - [x] Teste extra de `no-helmet` com 1.995 casos inéditos (deduplicados por hash perceptual)
 - [ ] **Teste do domínio de aplicação:** 200–300 imagens de obras reais anotadas à mão, para avaliar o v3 sem o viés da coleção de treino
 - [ ] Adaptar ao contexto brasileiro (ex.: cinto/arnês de altura, que hoje é confundido com `no-vest`)
-- [ ] **Quantização INT8** (OpenVINO/ONNX) e medição do trade-off velocidade × precisão
+- [x] **Quantização INT8:** OpenVINO INT8 1,9× mais rápido na CPU, sem perda de precisão
 - [ ] **Zonas de perigo:** polígonos definidos pelo usuário com alertas específicos
 - [ ] **Sistema de alertas:** log de violações com timestamp e captura de tela
 
@@ -322,6 +344,7 @@ python src/scripts/build_merged_dataset.py   # junta tudo em datasets/merged
 - **Desbalanceamento de classes** afeta justamente o que mais importa num sistema de segurança: detectar a *falta* de EPI.
 - **mAP não é a métrica do usuário:** o modelo original tinha mAP50 de 0.48 em `no-helmet`, mas, no limiar usado na prática, encontrava 1 caso em 24. Precisão e recall no limiar real mostram o que o sistema faz.
 - **Dados ganham de arquitetura:** o modelo maior ajudou, mas o maior salto veio de dados da classe rara, com pseudo-rótulos para não "apagar" as outras classes.
+- **INT8 depende do motor e da CPU:** o mesmo modelo quantizado ficou 1,9× mais rápido no OpenVINO e não ganhou nada no ONNX Runtime, que rende pouco sem as instruções VNNI, ausentes nesta CPU.
 
 ---
 

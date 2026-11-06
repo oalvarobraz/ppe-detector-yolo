@@ -25,6 +25,7 @@ export = [
     "onnxslim",
     "onnxruntime-gpu",  # também roda em CPU
     "openvino>=2024.0",
+    "nncf>=2.14",       # quantização INT8 do OpenVINO
 ]
 # Download do dataset do Roboflow
 dataset = [
