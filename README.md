@@ -1,6 +1,6 @@
 # 🦺 Safety-Vision: Detector de EPIs com YOLOv8
 
-> **Modelo:** YOLOv8n (Object Detection) · **mAP50 (validação):** 0.82
+> **Modelo:** YOLOv8s (`best_v3.pt`) · **mAP50 (teste):** 0.79 · **Recall de "sem capacete":** 0.04 → 0.67
 > **Formatos:** PyTorch · ONNX · OpenVINO — com benchmark de velocidade e precisão entre eles
 
 Este projeto de Visão Computacional usa **Deep Learning** para monitorar automaticamente a segurança em canteiros de obras, identificando o uso de Equipamentos de Proteção Individual (EPIs), como capacetes e coletes, em vídeo ou webcam.
@@ -35,16 +35,22 @@ ppe-detector-yolo/
 │   │   └── video.py             # Loop de vídeo/webcam (gravação, janela, Ctrl+C seguro)
 │   └── scripts/                 # Linha de comando
 │       ├── infer.py             # Inferência em vídeo ou webcam
-│       ├── export_model.py      # Exporta best.pt -> ONNX ou OpenVINO
+│       ├── export_model.py      # Exporta .pt -> ONNX ou OpenVINO
+│       ├── benchmark.py         # Compara velocidade e mAP entre os formatos
+│       ├── tune_threshold.py    # Precisão/recall por limiar de confiança (escolha do limiar)
+│       ├── train.py             # Treino (pensado para o Google Colab)
 │       ├── download_dataset.py  # Baixa o dataset do Roboflow (usa o .env)
-│       └── benchmark.py         # Compara velocidade e mAP entre os formatos
+│       ├── download_hardhat.py  # Baixa as imagens "sem capacete" do Hard Hat Detection
+│       ├── convert_hardhat.py   # Converte o Hard Hat (FiftyOne) para YOLO
+│       └── build_merged_dataset.py  # Junta os datasets, com pseudo-rótulos
 ├── notebooks/
 │   └── exploratory_training.ipynb   # Treinamento original (Google Colab)
 ├── weights/
-│   ├── best.pt                  # Pesos treinados (PyTorch)
-│   ├── best.onnx                # Gerado pelo export_model.py
-│   └── best_openvino_model/     # Gerado pelo export_model.py --format openvino
-├── results/benchmark.md         # Último relatório gerado pelo benchmark.py
+│   ├── best_v3.pt               # Modelo atual: YOLOv8s + dados extras (padrão do infer.py)
+│   ├── best_v2.pt               # YOLOv8s, só o dataset original
+│   ├── best.pt                  # YOLOv8n original
+│   └── *.onnx, *_openvino_model/    # Gerados pelo export_model.py (fora do git)
+├── results/                     # Relatórios do benchmark.py de cada modelo
 ├── assets/                      # Imagens e GIF da documentação
 └── pyproject.toml               # Dependências e configuração do pacote
 ```
@@ -127,16 +133,20 @@ python src/scripts/infer.py --source videos/obra.mp4 --output resultado.mp4
 # Webcam, mostrando numa janela (tecla 'q' ou Ctrl+C para sair)
 python src/scripts/infer.py --source 0 --show
 
-# Com GPU NVIDIA e modelo ONNX
-python src/scripts/infer.py --source videos/obra.mp4 --model weights/best.onnx --device 0
+# Com GPU NVIDIA
+python src/scripts/infer.py --source videos/obra.mp4 --device 0
+
+# Na CPU com OpenVINO (o mais rápido em CPU Intel)
+python src/scripts/infer.py --source videos/obra.mp4 --model weights/best_v3_openvino_model --device intel:cpu
 ```
 
 | Argumento | Descrição | Padrão |
 |-----------|-----------|--------|
 | `--source` | Arquivo de vídeo ou índice da webcam (`0`, `1`, ...) | *(obrigatório)* |
-| `--model` | Pesos: `.pt`, `.onnx` ou pasta `_openvino_model` | `weights/best.pt` |
+| `--model` | Pesos: `.pt`, `.onnx` ou pasta `_openvino_model` | `weights/best_v3.pt` |
 | `--output` | Arquivo de vídeo de saída | `output_video.mp4` |
 | `--conf` | Limiar de confiança (0.0 a 1.0) | `0.5` |
+| `--class-conf` | Limiares por classe (`classe=valor`); sem valores, usa `--conf` em tudo | `no-helmet=0.3` |
 | `--device` | `cpu`, `0` (GPU NVIDIA) ou `intel:cpu` (OpenVINO) | `cpu` |
 | `--show` | Mostra o resultado numa janela | desligado |
 
@@ -195,54 +205,92 @@ Medido com `src/scripts/benchmark.py` num notebook **Intel Core i7-8565U** (4 n�
 
 > Todas as variantes são validadas com imagem quadrada 640×640 (`rect=False`), porque os modelos exportados têm entrada fixa. Validando o `.pt` com o padrão do ultralytics (`rect=True`, padding mínimo por imagem), o mAP50 sobe para 0.841 e o de `no-helmet` para 0.609. Essa diferença vem do pré-processamento, não do modelo, e é amplificada pelas poucas amostras de `no-helmet`.
 
-### 🔁 Retreino: YOLOv8n vs YOLOv8s (split de teste, 90 imagens)
+### 🔁 Retreino e mais dados (split de teste, 90 imagens)
 
-Os retreinos foram feitos no Google Colab com `src/scripts/train.py` (100 épocas com `patience=20`; os dois pararam cedo). Todos os modelos foram avaliados no mesmo split de **teste**, nunca visto no treino.
+Os retreinos foram feitos no Google Colab com `src/scripts/train.py` (100 épocas com `patience=20`; todos pararam antes). Todos os modelos foram avaliados no mesmo split de **teste**, nunca visto no treino.
 
-| Modelo | mAP50 | mAP50-95 | helmet | **no-helmet** | no-vest | person | vest | GPU p50 | OpenVINO p50 |
-|--------|------:|---------:|-------:|--------------:|--------:|-------:|-----:|--------:|-------------:|
-| `best.pt` — v8n original (30 épocas) | 0.751 | **0.401** | 0.900 | 0.482 | 0.667 | 0.856 | **0.847** | **52 ms** | **63 ms** |
-| v8n retreinado (melhor época: 19) | 0.744 | 0.375 | 0.889 | 0.457 | 0.634 | **0.895** | 0.845 | 58 ms | 67 ms |
-| `best_v2.pt` — v8s (melhor época: 23) | **0.776** | 0.394 | **0.916** | **0.645** | **0.677** | 0.870 | 0.774 | 108 ms | 197 ms |
+| Modelo | mAP50 | mAP50-95 | helmet | **no-helmet** | no-vest | person | vest | GPU p50 |
+|--------|------:|---------:|-------:|--------------:|--------:|-------:|-----:|--------:|
+| `best.pt` — v8n original (30 épocas) | 0.751 | 0.401 | 0.900 | 0.482 | 0.667 | 0.856 | 0.847 | **52 ms** |
+| v8n retreinado (melhor época: 19) | 0.744 | 0.375 | 0.889 | 0.457 | 0.634 | **0.895** | 0.845 | 58 ms |
+| `best_v2.pt` — v8s (melhor época: 23) | 0.776 | 0.394 | **0.916** | 0.645 | **0.677** | 0.870 | 0.774 | 108 ms |
+| **`best_v3.pt` — v8s + dados extras** (melhor época: 40) | **0.790** | **0.417** | 0.902 | **0.657** | 0.654 | 0.859 | **0.879** | 108 ms |
 
-- **Retreinar o v8n não trouxe ganho.** A melhora em `no-helmet` (0.48 → 0.65) veio do **modelo maior**, ao custo de ser 2–3× mais lento.
+- **Retreinar o v8n não trouxe ganho.** A primeira melhora em `no-helmet` (v2) veio do **modelo maior**, ao custo de ser cerca de 2× mais lento.
+- **Mais dados (v3) melhoraram o modelo no geral:** o melhor mAP50 e mAP50-95, e o `vest`, que tinha caído no v2, se recuperou (0.77 → 0.88).
 - **A validação durante o treino superestima o modelo.** O v8n retreinado marcou mAP50 de 0.88 na validação (119 imagens, usadas para escolher o checkpoint) e 0.744 no teste.
-- Relatórios completos: [`results/benchmark_v2.md`](results/benchmark_v2.md) e [`results/benchmark_v2n.md`](results/benchmark_v2n.md).
+- Relatórios completos: [`results/benchmark_v2.md`](results/benchmark_v2.md), [`results/benchmark_v2n.md`](results/benchmark_v2n.md) e [`results/benchmark_v3.md`](results/benchmark_v3.md).
+
+### 🚨 O que importa no uso: o alerta "sem capacete" dispara?
+
+O mAP resume todos os limiares de confiança, mas o detector usa **um** limiar. Medindo `no-helmet` no teste (24 casos reais) com `src/scripts/tune_threshold.py`:
+
+| Modelo | Limiar | Precisão | **Recall** | Encontrados | Alarmes falsos |
+|--------|-------:|---------:|-----------:|------------:|---------------:|
+| `best.pt` (original) | 0.5 | 1.00 | **0.04** | 1 de 24 | 0 |
+| `best_v2.pt` | 0.5 | 0.75 | 0.25 | 6 de 24 | 2 |
+| `best_v3.pt` | 0.5 | 0.85 | 0.46 | 11 de 24 | 2 |
+| **`best_v3.pt`** (padrão do `infer.py`) | **0.3** | 0.67 | **0.67** | **16 de 24** | 8 |
+
+- **O modelo original praticamente nunca disparava o alerta** de "sem capacete": encontrava 1 caso em 24. O mAP de 0.48 escondia isso.
+- O `infer.py` usa **limiar 0.3 só para `no-helmet`** (`--class-conf`) e 0.5 para as outras classes. Num sistema de segurança, um alarme falso custa menos que deixar passar alguém sem capacete.
+- Com só 24 casos no teste, esses números têm bastante incerteza.
 
 ---
 
 ## 🧪 Treinamento
 
-O modelo foi treinado no Google Colab (GPU T4) com o notebook `notebooks/exploratory_training.ipynb`:
+Os treinos rodam no Google Colab (GPU T4). A GPU local, uma MX110 de 2 GB, levaria mais de 20 horas.
 
 ```python
-from ultralytics import YOLO
-
-model = YOLO("yolov8n.pt")
-model.train(data="data.yaml", epochs=30, imgsz=640, batch=16, patience=10, cache=True)
+# No Colab
+!git clone https://github.com/oalvarobraz/ppe-detector-yolo.git
+%cd ppe-detector-yolo
+!pip install -q -e ".[dataset]"
+!python src/scripts/train.py --data datasets/merged/data.yaml --model yolov8s.pt --name ppe_v3 \
+    --project /content/drive/MyDrive/ppe_runs     # salva no Drive, caso a sessão caia
 ```
 
-### 🔹 Dataset
+Ao final, o `train.py` avalia o melhor checkpoint no split de **teste** e imprime o mAP por classe. O modelo original (`best.pt`) foi treinado com o notebook `notebooks/exploratory_training.ipynb` (YOLOv8n, 30 épocas).
+
+### 🔹 Dataset original
 
 **Fonte:** [Roboflow 100 — Construction Safety](https://universe.roboflow.com/roboflow-100/construction-safety-gsnvb) (versão 2, licença CC BY 4.0)
 
 | Split | Imagens | helmet | no-helmet | no-vest | person | vest |
 |-------|---------|--------|-----------|---------|--------|------|
-| Treino | 997 | 1443 | **73** | 695 | 2175 | 1004 |
-| Validação | 119 | 148 | **10** | 86 | 222 | 131 |
-| Teste | 90 | 143 | **21** | 59 | 190 | 121 |
+| Treino | 997 | 2116 | **94** | 741 | 2362 | 1073 |
+| Validação | 119 | 232 | **11** | 90 | 241 | 141 |
+| Teste | 90 | 195 | **24** | 61 | 214 | 129 |
 
 Total: **1.206 imagens** (83% treino / 10% validação / 7% teste).
 
-> ⚠️ **O ponto fraco do modelo é o desbalanceamento:** há apenas **73** exemplos de `no-helmet` no treino, contra **1443** de `helmet` (cerca de 20×). Como só 10 caixas de `no-helmet` existem na validação, o mAP dessa classe também é instável: errar uma ou duas caixas muda bastante o número.
+> ⚠️ **O ponto fraco do dataset é o desbalanceamento:** há apenas **94** exemplos de `no-helmet` no treino, contra **2116** de `helmet` (cerca de 22×).
+
+### 🔹 Dataset ampliado (`best_v3.pt`)
+
+Para corrigir o desbalanceamento, o treino recebeu as **920 imagens com "cabeça sem capacete"** do [Hard Hat Detection](https://huggingface.co/datasets/Voxel51/hard-hat-detection) (licença CC0):
+
+```bash
+python src/scripts/download_dataset.py       # dataset original (Roboflow)
+python src/scripts/download_hardhat.py       # 920 imagens com a classe "head"
+python src/scripts/convert_hardhat.py        # FiftyOne -> YOLO (head -> no-helmet)
+python src/scripts/build_merged_dataset.py   # junta tudo em datasets/merged
+```
+
+- Esse dataset só anota capacete e cabeça. Para que coletes e pessoas não virassem "fundo", **`person`, `vest` e `no-vest` foram completados com pseudo-rótulos** do `best_v2.pt` (confiança ≥ 0.5).
+- A **validação e o teste continuam sendo os originais**, para a comparação entre modelos ser justa.
+- Resultado no treino: **1.917 imagens**, e `no-helmet` passou de 94 para 5.879 caixas.
 
 ---
 
 ## 🛣️ Roadmap
 
 - [x] Exportação para **ONNX** e **OpenVINO**, com benchmark de velocidade e precisão
-- [ ] **Balanceamento do dataset:** mais imagens de `no-helmet` / `no-vest` e augmentation nas classes minoritárias
-- [x] **Retreino** com modelo maior (YOLOv8s): `no-helmet` 0.48 → 0.65 no teste, porém 2–3× mais lento
+- [x] **Retreino** com modelo maior (YOLOv8s): `no-helmet` 0.48 → 0.65 no teste, porém cerca de 2× mais lento
+- [x] **Mais dados de `no-helmet`** (Hard Hat Detection + pseudo-rótulos): recall do alerta 0.04 → 0.67
+- [x] **Limiar de confiança por classe** (`no-helmet=0.3`), escolhido com `tune_threshold.py`
+- [ ] Ampliar o split de teste: com 24 casos de `no-helmet`, as métricas dessa classe ainda são incertas
 - [ ] Adaptar ao contexto brasileiro (ex.: cinto/arnês de altura, que hoje é confundido com `no-vest`)
 - [ ] **Quantização INT8** (OpenVINO/ONNX) e medição do trade-off velocidade × precisão
 - [ ] **Zonas de perigo:** polígonos definidos pelo usuário com alertas específicos
@@ -256,6 +304,8 @@ Total: **1.206 imagens** (83% treino / 10% validação / 7% teste).
 - **Compare de igual para igual:** a primeira medição de mAP indicou queda no ONNX, mas era diferença de **pré-processamento** (o `.pt` valida com `rect=True` por padrão). Com a mesma entrada, as saídas do PyTorch e do ONNX diferem em menos de 0.001.
 - **Benchmark em notebook é ruidoso:** temperatura (82 °C), perfil de energia e outros programas mudam os tempos. Aquecimento, rodadas alternadas e percentis (p50/p95) tornam a comparação confiável.
 - **Desbalanceamento de classes** afeta justamente o que mais importa num sistema de segurança: detectar a *falta* de EPI.
+- **mAP não é a métrica do usuário:** o modelo original tinha mAP50 de 0.48 em `no-helmet`, mas, no limiar usado na prática, encontrava 1 caso em 24. Precisão e recall no limiar real mostram o que o sistema faz.
+- **Dados ganham de arquitetura:** o modelo maior ajudou, mas o maior salto veio de dados da classe rara, com pseudo-rótulos para não "apagar" as outras classes.
 
 ---
 
